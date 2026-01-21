@@ -3,6 +3,8 @@
 #include <string.h>
 #include "shellmemory.h"
 #include "shell.h"
+#include <dirent.h>
+#include <stdbool.h>
 
 int MAX_ARGS_SIZE = 3;
 
@@ -24,6 +26,7 @@ int print(char *var);
 int source(char *script);
 int badcommandFileDoesNotExist();
 int echo(char *input);
+int my_ls();
 
 // Interpret commands and their arguments
 int interpreter(char *command_args[], int args_size) {
@@ -64,6 +67,11 @@ int interpreter(char *command_args[], int args_size) {
         if (args_size != 2)
             return badcommand();
         return source(command_args[1]);
+    } else if (strcmp(command_args[0], "my_ls") == 0) {
+	if (args_size != 1)
+	    return badcommand();
+	return my_ls();
+
 
     } else if (strcmp(command_args[0], "echo") == 0) {
 	if (args_size != 2)
@@ -73,6 +81,51 @@ int interpreter(char *command_args[], int args_size) {
     } else
         return badcommand();
 }
+
+void swap(char** xp, char** yp){
+    char *temp = *xp;
+    *xp = *yp;
+    *yp = temp;
+}
+
+int my_ls() {
+	DIR *current_directory = opendir("."); 
+	if (current_directory == NULL) {perror("Cannot open");
+		exit(1);}
+	
+	struct dirent *file_name;
+	char *names[1024];
+	int count = 0;
+	while ((file_name = readdir(current_directory)) != NULL) {
+		names[count++] = file_name->d_name;
+}
+	int i, j;
+   	bool swapped;
+    	for (i = 0; i < count - 1; i++) {
+        	swapped = false;
+        	for (j = 0; j < count - i - 1; j++) {
+            		if (strcmp(names[j], names[j + 1]) > 0) {
+    				swap(&names[j], &names[j + 1]);
+    				swapped = true;
+
+            }
+        }
+
+        // If no two elements were swapped by inner loop,
+        // then break
+        if (swapped == false)
+            break;
+    }
+        for (int k = 0; k < count; k++) {
+              printf("%s\n", names[k]);
+}
+	closedir(current_directory);
+	return 0;
+}
+
+
+
+
 
 int help() {
 
