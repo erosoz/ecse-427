@@ -5,6 +5,7 @@
 #include "shell.h"
 #include <dirent.h>
 #include <stdbool.h>
+#include <sys/stat.h>
 
 int MAX_ARGS_SIZE = 3;
 
@@ -27,6 +28,7 @@ int source(char *script);
 int badcommandFileDoesNotExist();
 int echo(char *input);
 int my_ls();
+int my_mkdir(char *dirname);
 
 // Interpret commands and their arguments
 int interpreter(char *command_args[], int args_size) {
@@ -72,6 +74,10 @@ int interpreter(char *command_args[], int args_size) {
 	    return badcommand();
 	return my_ls();
 
+    } else if (strcmp(command_args[0], "my_mkdir") == 0) {
+	if (args_size != 2)
+		return badcommand();
+	return my_mkdir(command_args[1]);
 
     } else if (strcmp(command_args[0], "echo") == 0) {
 	if (args_size != 2)
@@ -124,7 +130,19 @@ int my_ls() {
 }
 
 
+int my_mkdir(char *dirname) {
+	if (dirname[0] == '$') {
+		char *variable = dirname + 1;
+		if (strcmp(mem_get_value(variable), "Variable does not exist") == 0) {printf("Bad command: my_mkdir");}
+		else {
+			mkdir(mem_get_value(variable), 0755);
+}}
+	else {
+		mkdir(dirname, 0755);
+}
+	return 0;
 
+}
 
 
 int help() {
