@@ -100,7 +100,7 @@ int interpreter(char *command_args[], int args_size) {
 }
 
 int my_cd(const char *path) {
-	if (chdir(dirname) == -1) {
+	if (chdir(path) == -1) {
         printf("Bad command: my_cd\n");
         return 1;
     }
