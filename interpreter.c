@@ -6,6 +6,7 @@
 #include <dirent.h>
 #include <stdbool.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
 int MAX_ARGS_SIZE = 3;
 
@@ -29,6 +30,8 @@ int badcommandFileDoesNotExist();
 int echo(char *input);
 int my_ls();
 int my_mkdir(char *dirname);
+int my_touch(char *filename);
+int my_cd(const char *path);
 
 // Interpret commands and their arguments
 int interpreter(char *command_args[], int args_size) {
@@ -83,9 +86,34 @@ int interpreter(char *command_args[], int args_size) {
 	if (args_size != 2)
 	    return badcommand();
 	return echo(command_args[1]);
+    } else if (strcmp(command_args[0], "my_touch") == 0) {
+	if (args_size != 2)
+	    return badcommand();
+	return my_touch(command_args[1]);
+    } else if (strcmp(command_args[0], "my_cd") == 0) {
+	if (args_size != 2)
+	    return badcommand();
+	return my_cd(command_args[1]);
 
     } else
         return badcommand();
+}
+
+int my_cd(const char *path) {
+	if (chdir(dirname) == -1) {
+        printf("Bad command: my_cd\n");
+        return 1;
+    }
+    return 0;
+
+
+}
+
+int my_touch(char *filename) {
+	FILE *newfile = fopen(filename, "w");
+	fclose(newfile);
+	return 0;
+
 }
 
 void swap(char** xp, char** yp){
