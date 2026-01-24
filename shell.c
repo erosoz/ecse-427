@@ -24,12 +24,10 @@ int main(int argc, char *argv[]) {
     //init shell memory
     mem_init();
     while(1) {
-	if (isatty(STDIN_FILENO)) {							
+	if (isatty(STDIN_FILENO)) { //checks the mode type, if it is interactive prints the $							
         printf("%c ", prompt);
 	}
-        // here you should check the unistd library 
-        // so that you can find a way to not display $ in the batch mode
-	if (fgets(userInput, MAX_USER_INPUT-1, stdin) == NULL) {
+	if (fgets(userInput, MAX_USER_INPUT-1, stdin) == NULL) { //so that it doesnt loop if there is no command left it breaks from loop/reading
 		break;
 }
         errorCode = parseInput(userInput);
@@ -43,7 +41,7 @@ int main(int argc, char *argv[]) {
 int wordEnding(char c) {
     // You may want to add ';' to this at some point,
     // or you may want to find a different way to implement chains.
-    return c == '\0' || c == '\n' || c == ' ';
+    return c == '\0' || c == '\n' || c == ' ' || c == ';' ;
 }
 
 int parseInput(char inp[]) {
@@ -51,8 +49,10 @@ int parseInput(char inp[]) {
     int ix = 0, w = 0;
     int wordlen;
     int errorCode;
-    for (ix = 0; inp[ix] == ' ' && ix < 1000; ix++); // skip white spaces
-    while (inp[ix] != '\n' && inp[ix] != '\0' && ix < 1000) {
+    while (inp[ix] != '\n' && inp[ix] != '\0') {
+    w = 0;
+    for (; inp[ix] == ' ' && ix < 1000; ix++); // skip white spaces
+    while (inp[ix] != ';' && ix < 1000 && inp[ix] != '\n' && inp[ix] != '\0') {
         // extract a word
         for (wordlen = 0; !wordEnding(inp[ix]) && ix < 1000; ix++, wordlen++) {
             tmp[wordlen] = inp[ix];                        
@@ -60,9 +60,13 @@ int parseInput(char inp[]) {
         tmp[wordlen] = '\0';
         words[w] = strdup(tmp);
         w++;
-        if (inp[ix] == '\0') break;
-        ix++; 
+        if (inp[ix] == '\0' || inp[ix] == '\n' || inp[ix] == ';') break;
+
+  
+    while (inp[ix] == ' ' && ix < 1000) ix++;
     }
     errorCode = interpreter(words, w);
+    ix++;
+    }
     return errorCode;
 }
