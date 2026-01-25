@@ -7,6 +7,10 @@
 #include <stdbool.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+
+
 
 int MAX_ARGS_SIZE = 3;
 
@@ -32,6 +36,7 @@ int my_ls();
 int my_mkdir(char *dirname);
 int my_touch(char *filename);
 int my_cd(const char *path);
+int run(char *command, char *variables[]);
 
 // Interpret commands and their arguments
 int interpreter(char *command_args[], int args_size) {
@@ -94,7 +99,10 @@ int interpreter(char *command_args[], int args_size) {
 	if (args_size != 2)
 	    return badcommand();
 	return my_cd(command_args[1]);
-
+    } else if (strcmp(command_args[0], "run") == 0) {
+      if (args_size < 2) return badcommand();
+      command_args[args_size] = NULL; 
+      return run(command_args[1], &command_args[1]);  
     } else
         return badcommand();
 }
@@ -108,6 +116,23 @@ int my_cd(const char *path) {
 
 
 }
+
+
+int run(char *command, char *variables[]) {
+	pid_t pid = fork();
+	if (pid == 0) {
+	execvp(command, variables);
+	exit(1);
+	}
+	else {
+	int status;
+        waitpid(pid, &status, 0);
+        return 0;
+}
+}
+
+
+
 
 int my_touch(char *filename) {
 	FILE *newfile = fopen(filename, "w");
