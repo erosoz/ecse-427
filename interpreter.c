@@ -1,18 +1,31 @@
+//#define DEBUG 1
+
+#ifdef DEBUG
+#   define debug(...) fprintf(stderr, __VA_ARGS__)
+#else
+#   define debug(...)
+// NDEBUG disables asserts
+#   define NDEBUG
+#endif
+
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>              // tolower, isdigit
+#include <dirent.h>             // scandir
+#include <unistd.h>             // chdir
+#include <sys/stat.h>           // mkdir
+// for run:
+#include <sys/types.h>          // pid_t
+#include <sys/wait.h>           // waitpid
+
 #include "shellmemory.h"
 #include "shell.h"
-#include <dirent.h>
-#include <stdbool.h>
-#include <sys/stat.h>
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/wait.h>
 
-
-
-int MAX_ARGS_SIZE = 3;
+#include "interpreter.h"
+int next_pid = 1;
+PCB *head = NULL;
 
 int badcommand() {
     printf("Unknown Command\n");
@@ -25,25 +38,50 @@ int badcommandFileDoesNotExist() {
     return 3;
 }
 
+int badcommandMkdir() {
+    printf("Bad command: my_mkdir\n");
+    return 4;
+}
+
+int badcommandCd() {
+    printf("Bad command: my_cd\n");
+    return 5;
+}
+
 int help();
 int quit();
 int set(char *var, char *value);
 int print(char *var);
+int echo(char *tok);
+int ls();
+int my_mkdir(char *name);
+int touch(char *path);
+int cd(char *path);
 int source(char *script);
+int run(char *args[], int args_size);
 int badcommandFileDoesNotExist();
-int echo(char *input);
-int my_ls();
-int my_mkdir(char *dirname);
-int my_touch(char *filename);
-int my_cd(const char *path);
-int run(char *command, char *variables[]);
+PCB *pcb_create(int start, int length);
+void enqueue(PCB *p);
+PCB *dequeue();
+void FCFS();
 
 // Interpret commands and their arguments
 int interpreter(char *command_args[], int args_size) {
     int i;
 
-    if (args_size < 1 || args_size > MAX_ARGS_SIZE) {
-        return badcommand();
+    // these bits of debug output were very helpful for debugging
+    // the changes we made to the parser!
+    debug("#args: %d\n", args_size);
+#ifdef DEBUG
+    for (size_t i = 0; i < args_size; ++i) {
+        debug("  %ld: %s\n", i, command_args[i]);
+    }
+#endif
+
+    if (args_size < 1) {
+        // This shouldn't be possible but we are defensive programmers.
+        fprintf(stderr, "interpreter called with no words?\n");
+        exit(1);
     }
 
     for (i = 0; i < args_size; i++) {   // terminate args at newlines
@@ -73,130 +111,44 @@ int interpreter(char *command_args[], int args_size) {
             return badcommand();
         return print(command_args[1]);
 
+    } else if (strcmp(command_args[0], "echo") == 0) {
+        if (args_size != 2)
+            return badcommand();
+        return echo(command_args[1]);
+
+    } else if (strcmp(command_args[0], "my_ls") == 0) {
+        if (args_size != 1)
+            return badcommand();
+        return ls();
+
+    } else if (strcmp(command_args[0], "my_mkdir") == 0) {
+        if (args_size != 2)
+            return badcommand();
+        return my_mkdir(command_args[1]);
+
+    } else if (strcmp(command_args[0], "my_touch") == 0) {
+        if (args_size != 2)
+            return badcommand();
+        return touch(command_args[1]);
+
+    } else if (strcmp(command_args[0], "my_cd") == 0) {
+        if (args_size != 2)
+            return badcommand();
+        return cd(command_args[1]);
+
     } else if (strcmp(command_args[0], "source") == 0) {
         if (args_size != 2)
             return badcommand();
         return source(command_args[1]);
-    } else if (strcmp(command_args[0], "my_ls") == 0) {
-	if (args_size != 1)
-	    return badcommand();
-	return my_ls();
 
-    } else if (strcmp(command_args[0], "my_mkdir") == 0) {
-	if (args_size != 2)
-		return badcommand();
-	return my_mkdir(command_args[1]);
-
-    } else if (strcmp(command_args[0], "echo") == 0) {
-	if (args_size != 2)
-	    return badcommand();
-	return echo(command_args[1]);
-    } else if (strcmp(command_args[0], "my_touch") == 0) {
-	if (args_size != 2)
-	    return badcommand();
-	return my_touch(command_args[1]);
-    } else if (strcmp(command_args[0], "my_cd") == 0) {
-	if (args_size != 2)
-	    return badcommand();
-	return my_cd(command_args[1]);
     } else if (strcmp(command_args[0], "run") == 0) {
-      if (args_size < 2) return badcommand();
-      command_args[args_size] = NULL; 
-      return run(command_args[1], &command_args[1]);  
+        if (args_size < 2)
+            return badcommand();
+        return run(&command_args[1], args_size - 1);
+
     } else
         return badcommand();
 }
-
-int my_cd(const char *path) {
-	if (chdir(path) == -1) {
-        printf("Bad command: my_cd\n");
-        return 1;
-    }
-    return 0;
-
-
-}
-
-
-int run(char *command, char *variables[]) {
-	pid_t pid = fork();
-	if (pid == 0) {
-	execvp(command, variables);
-	exit(1);
-	}
-	else {
-	int status;
-        waitpid(pid, &status, 0);
-        return 0;
-}
-}
-
-
-
-
-int my_touch(char *filename) {
-	FILE *newfile = fopen(filename, "w");
-	fclose(newfile);
-	return 0;
-
-}
-
-void swap(char** xp, char** yp){
-    char *temp = *xp;
-    *xp = *yp;
-    *yp = temp;
-}
-
-int my_ls() {
-	DIR *current_directory = opendir("."); 
-	if (current_directory == NULL) {perror("Cannot open");
-		exit(1);}
-	
-	struct dirent *file_name;
-	char *names[1024];
-	int count = 0;
-	while ((file_name = readdir(current_directory)) != NULL) {
-		names[count++] = file_name->d_name;
-}
-	int i, j;
-   	bool swapped;
-    	for (i = 0; i < count - 1; i++) {
-        	swapped = false;
-        	for (j = 0; j < count - i - 1; j++) {
-            		if (strcmp(names[j], names[j + 1]) > 0) {
-    				swap(&names[j], &names[j + 1]);
-    				swapped = true;
-
-            }
-        }
-
-        // If no two elements were swapped by inner loop,
-        // then break
-        if (swapped == false)
-            break;
-    }
-        for (int k = 0; k < count; k++) {
-              printf("%s\n", names[k]);
-}
-	closedir(current_directory);
-	return 0;
-}
-
-
-int my_mkdir(char *dirname) {
-	if (dirname[0] == '$') {
-		char *variable = dirname + 1;
-		if (strcmp(mem_get_value(variable), "Variable does not exist") == 0) {printf("Bad command: my_mkdir");}
-		else {
-			mkdir(mem_get_value(variable), 0755);
-}}
-	else {
-		mkdir(dirname, 0755);
-}
-	return 0;
-
-}
-
 
 int help() {
 
@@ -206,7 +158,7 @@ help			Displays all the commands\n \
 quit			Exits / terminates the shell with “Bye!”\n \
 set VAR STRING		Assigns a value to shell memory\n \
 print VAR		Displays the STRING assigned to VAR\n \
-source SCRIPT.TXT	Executes the file SCRIPT.TXT\n ";
+source SCRIPT.TXT		Executes the file SCRIPT.TXT\n ";
     printf("%s\n", help_string);
     return 0;
 }
@@ -217,62 +169,283 @@ int quit() {
 }
 
 int set(char *var, char *value) {
-    // Challenge: allow setting VAR to the rest of the input line,
-    // possibly including spaces.
-
-    // Hint: Since "value" might contain multiple tokens, you'll need to loop
-    // through them, concatenate each token to the buffer, and handle spacing
-    // appropriately. Investigate how `strcat` works and how you can use it
-    // effectively here.
-
     mem_set_value(var, value);
     return 0;
 }
 
-
 int print(char *var) {
-    printf("%s\n", mem_get_value(var));
+    char *value = mem_get_value(var);
+    if (value) {
+        printf("%s\n", value);
+        free(value);
+    } else {
+        printf("Variable does not exist\n");
+    }
     return 0;
 }
 
-int echo(char *input) {
-// Basically, it first checks if there is a $ if there is not prints as it is.
-//But if there is it first disreagrds the $ character and take the rest as a variable which then it looks to memory for the value
-    if (input[0] == '$') {
+int echo(char *tok) {
+    int must_free = 0;
+    // is it a var?
+    if (tok[0] == '$') {
+        tok++;                  // advance pointer, so that tok is now the stuff after '$'
+        tok = mem_get_value(tok);
+        if (tok == NULL) {
+            tok = "";           // must use empty string, can't pass NULL to printf
+        } else {
+            must_free = 1;
+        }
+    }
 
-	char *variable = input + 1;
-	if (strcmp(mem_get_value(variable), "Variable does not exist") == 0) {
-		printf("\n");
-}	else {
-		printf("%s\n", mem_get_value(variable));
-}}
-    else {
-	printf("%s\n", input);
+    printf("%s\n", tok);
+
+    // memory management technically optional for this assignment
+    if (must_free) free(tok);
+
+    return 0;
 }
+
+// We can hide dotfiles in ls using either the filter operand to scandir,
+// or by checking the first character ourselves when we go to print
+// the names. That would work, and is less code, but this is more robust.
+// And this is also better since it won't allocate extra dirents.
+int ls_filter(const struct dirent *d) {
+    if (d->d_name[0] == '.') return 0;
+    return 1;
+}
+
+int ls_compare_char(char a, char b) {
+    // assumption: a,b are both either digits or letters.
+    // If this is not true, the characters will be effectively compared
+    // as ASCII when we do the lower_a - lower_b fallback.
+
+    // if both are digits, compare them
+    if (isdigit(a) && isdigit(b)) {
+        return a - b;
+    }
+    // if only a is a digit, then b isn't, so a wins.
+    if (isdigit(a)) {
+        return -1;
+    }
+
+    // lowercase both letters so we can compare their alphabetic position.
+    char lower_a = tolower(a), lower_b = tolower(b);
+    if (lower_a == lower_b) {
+        // a and b are the same letter, possibly in different cases.
+        // If they are really the same letter, this returns 0.
+        // Otherwise, it's negative if A was capital,
+        // and positive if B is capital.
+        return a - b;
+    }
+
+    // Otherwise, compare their alphabetic position by comparing
+    // them at a known case.
+    return lower_a - lower_b;
+}
+
+int ls_compare_str(const char *a, const char *b) {
+    // a simple strcmp implementation that uses ls_compare_char.
+    // We only check if *a is zero, since if *b is zero earlier,
+    // it would've been unequal to *a at that time and we would return.
+    // If *b is zero at the same point or later than *a, we'll exit the
+    // loop and return the correct value with the last comparison.
+
+    while (*a != '\0') {
+        int d = ls_compare_char(*a, *b);
+        if (d != 0) return d;
+        a++, b++;
+    }
+    return ls_compare_char(*a, *b);
+}
+
+int ls_compare(const struct dirent **a, const struct dirent **b) {
+    return ls_compare_str((*a)->d_name, (*b)->d_name);
+}
+
+int ls() {
+    // straight out of the man page examples for scandir
+    // alphasort uses strcoll instead of strcmp,
+    // so we have to implement our own comparator to match the ls spec.
+    // Note that the test cases weren't very picky about the specified order,
+    // so if you just used alphasort with scandir, you should have passed.
+    // This was intentional on our part.
+    struct dirent **namelist;
+    int n;
+
+    n = scandir(".", &namelist, NULL, ls_compare);
+    if (n == -1) {
+        // something is catastrophically wrong, just give up.
+        perror("my_ls couldn't scan the directory");
+        return 0;
+    }
+
+    for (size_t i = 0; i < n; ++i) {
+        printf("%s\n", namelist[i]->d_name);
+        free(namelist[i]);
+    }
+    free(namelist);
+
+    return 0;
+}
+
+int str_isalphanum(char *name) {
+    for (char c = *name; c != '\0'; c = *++name) {
+        if (!(isdigit(c) || isalpha(c))) return 0;
+    }
+    return 1;
+}
+
+int my_mkdir(char *name) {
+    int must_free = 0;
+
+    debug("my_mkdir: ->%s<-\n", name);
+
+    if (name[0] == '$') {
+        ++name;
+        // lookup name
+        name = mem_get_value(name);
+        debug("  lookup: %s\n", name ? name : "(NULL)");
+        if (name) {
+            // name exists, should free whatever we got
+            must_free = 1;
+        }
+    }
+    if (!name || !str_isalphanum(name)) {
+        // either name doesn't exist, or isn't valid, error.
+        if (must_free) free(name);
+        return badcommandMkdir();
+    }
+    // at this point name is definitely OK
+
+    // 0777 means "777 in octal," aka 511. This value means
+    // "give the new folder all permissions that we can."
+    int result = mkdir(name, 0777);
+
+    if (result) {
+        // description doesn't specify what to do in this case,
+        // (including if the directory already exists)
+        // so we just give an error message on stderr and ignore it.
+        perror("Something went wrong in my_mkdir");
+    }
+
+    if (must_free) free(name);
+    return 0;
+}
+
+int touch(char *path) {
+    // we're told we can assume this.
+    assert(str_isalphanum(path));
+    // if things go wrong, just ignore it.
+    FILE *f = fopen(path, "a");
+    fclose(f);
+    return 0;
+}
+
+int cd(char *path) {
+    // we're told we can assume this.
+    assert(str_isalphanum(path));
+
+    int result = chdir(path);
+    if (result) {
+        // chdir can fail for several reasons, but the only one we need
+        // to handle here for the spec is the ENOENT reason,
+        // aka Error NO ENTry -- the directory doesn't exist.
+        // Since that's the only one we have to handle, we'll just assume
+        // that that's what happened.
+        // Alternatively, you can check if the directory exists
+        // explicitly first using `stat`. However it is often better to
+        // simply try to use a filesystem resource and then recover when
+        // you can't, rather than trying to validate first. If you validate
+        // first while two users are on the system, there's a race condition!
+        return badcommandCd();
+    }
     return 0;
 }
 
 int source(char *script) {
-    int errCode = 0;
-    char line[MAX_USER_INPUT];
-    FILE *p = fopen(script, "rt");      // the program is in a file
+	int start = frame_store_count;
+	int length = frame_read_store(script, start);
+	if (length < 0) return badcommandFileDoesNotExist();
+	frame_store_count += length;
+	PCB *p = pcb_create(start, length);
+	enqueue(p);
+	FCFS();
+	return 0;
+}
 
-    if (p == NULL) {
-        return badcommandFileDoesNotExist();
+int run(char *args[], int arg_size) {
+    // copy the args into a new NULL-terminated array.
+    char **adj_args = calloc(arg_size + 1, sizeof(char *));
+    for (int i = 0; i < arg_size; ++i) {
+        adj_args[i] = args[i];
     }
 
-    fgets(line, MAX_USER_INPUT - 1, p);
-    while (1) {
-        errCode = parseInput(line);     // which calls interpreter()
-        memset(line, 0, sizeof(line));
-
-        if (feof(p)) {
-            break;
-        }
-        fgets(line, MAX_USER_INPUT - 1, p);
+    // always flush output streams before forking.
+    fflush(stdout);
+    // attempt to fork the shell
+    pid_t pid = fork();
+    if (pid < 0) {
+        // fork failed. Report the error and move on.
+        perror("fork() failed");
+        return 1;
+    } else if (pid == 0) {
+        // we are the new child process.
+        execvp(adj_args[0], adj_args);
+        perror("exec failed");
+        // The parent and child are sharing stdin, and according to
+        // a part of the glibc documentation that you are **not**
+        // expected to know for this course, a shared input handle
+        // should be fflushed (if it is needed) or closed
+        // (if it is not). Handling this exec error case is not even
+        // necessary, but let's do it right.
+        // (Failure to do this can result in the parent process
+        // reading the remaining input twice in batch mode.)
+        fclose(stdin);
+        exit(1);
+    } else {
+        // we are the parent process.
+        waitpid(pid, NULL, 0);
     }
 
-    fclose(p);
+    return 0;
+}
 
-    return errCode;
+PCB *pcb_create(int start, int length) {
+    PCB *p = malloc(sizeof(PCB));
+    p->pid = next_pid++;
+    p->start = start;
+    p->length = length;
+    p->pc = 0;
+    p->next = NULL;
+    return p;
+}
+
+void enqueue(PCB *p) {
+	if (head == NULL) head = p;
+	else {
+	PCB *index = head;
+	while (index->next != NULL) index = index->next;
+	index->next = p;
+	p->next = NULL;
+
+}
+}
+PCB *dequeue() {
+    if (head == NULL) return NULL;
+    PCB *p = head;
+    head = head->next;
+    p->next = NULL;
+    return p;
+}
+
+void FCFS() {
+	while (head != NULL) {
+		PCB *p = dequeue();
+		while (p->pc < p->length) {
+			parseInput(frame_store[p->start + p->pc]);
+			p->pc++;
+
+}		free(p);
+}
+
 }
